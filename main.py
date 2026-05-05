@@ -17,12 +17,11 @@ def run():
 def keep_alive():
     Thread(target=run).start()
 
-# --- הגדרות בוט ---
+# --- הגדרות ---
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ROLE_NAME = "Owner"
-# שים לב: תוודא שזה ה-ID הנכון שלך בדיסקורד
-MY_USER_ID = 1499077731659284540 
-LOG_CHANNEL_ID = 1499510962296721568
+# ה-ID של ערוץ הלוגים שלך
+LOG_CHANNEL_ID = 1499510962296721568 
 DB_FILE = "database.json"
 
 def get_data():
@@ -36,7 +35,7 @@ def save_data(data):
 
 async def send_log(bot, title, description, color=discord.Color.blue()):
     try:
-        channel = await bot.fetch_channel(LOG_CHANNEL_ID)
+        channel = bot.get_channel(LOG_CHANNEL_ID) or await bot.fetch_channel(LOG_CHANNEL_ID)
         embed = discord.Embed(title=title, description=description, color=color, timestamp=datetime.datetime.now())
         await channel.send(embed=embed)
     except Exception as e:
@@ -72,29 +71,21 @@ async def run_attack(phone):
             except: failed += 1
     return success, failed
 
-# --- בדיקת הרשאות משופרת ---
-def is_owner(interaction: discord.Interaction):
-    has_role = discord.utils.get(interaction.user.roles, name=OWNER_ROLE_NAME) is not None
-    is_me = interaction.user.id == MY_USER_ID
-    # הדפסה ללוג ב-Render כדי שנדע מה ה-ID שלך אם זה לא עובד
-    print(f"Check Access for {interaction.user.name} ({interaction.user.id}). Owner: {is_me}, Has Role: {has_role}")
-    return is_me or has_role
-
 # --- ממשק דיסקורד ---
 class AttackModal(discord.ui.Modal, title="Vouge - SMS Attack"):
     phone = discord.ui.TextInput(label="מספר טלפון", placeholder="05XXXXXXXX", min_length=10, max_length=10)
     async def on_submit(self, interaction: discord.Interaction):
         data = get_data()
         uid = str(interaction.user.id)
+        is_admin = discord.utils.get(interaction.user.roles, name=OWNER_ROLE_NAME) is not None
         
         if self.phone.value in data["blacklist"]:
             return await interaction.response.send_message("❌ המספר חסום!", ephemeral=True)
         
-        user_bal = data["credits"].get(uid, 0)
-        if not is_owner(interaction) and user_bal <= 0:
+        if not is_admin and data["credits"].get(uid, 0) <= 0:
             return await interaction.response.send_message("❌ אין לך קרדיטים!", ephemeral=True)
         
-        if not is_owner(interaction) and user_bal < 900000:
+        if not is_admin:
             data["credits"][uid] -= 1
             save_data(data)
 
@@ -124,19 +115,19 @@ bot = MyBot()
 
 @bot.tree.command(name="setup")
 async def setup(interaction: discord.Interaction):
-    if not is_owner(interaction): 
-        return await interaction.response.send_message("❌ חסום", ephemeral=True)
+    if discord.utils.get(interaction.user.roles, name=OWNER_ROLE_NAME) is None:
+        return await interaction.response.send_message("❌ אדמין בלבד!", ephemeral=True)
     
-    embed = discord.Embed(title="🛡️ Vouge Panel", description="לחץ על הכפתור למטה כדי להתחיל תקיפה.", color=discord.Color.red())
+    embed = discord.Embed(title="🛡️ Vouge Panel", color=discord.Color.red())
     await interaction.response.send_message(embed=embed, view=ControlPanelView())
 
-@bot.tree.command(name="lifetime")
-async def lifetime(interaction: discord.Interaction, member: discord.Member):
-    if not is_owner(interaction): return
+@bot.tree.command(name="addcredit")
+async def add_cr(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if discord.utils.get(interaction.user.roles, name=OWNER_ROLE_NAME) is None: return
     data = get_data()
-    data["credits"][str(member.id)] = 999999
+    data["credits"][str(member.id)] = data["credits"].get(str(member.id), 0) + amount
     save_data(data)
-    await interaction.response.send_message(f"👑 {member.mention} קיבל גישת Lifetime!")
+    await interaction.response.send_message(f"✅ נוספו {amount} ל-{member.mention}")
 
 if __name__ == "__main__":
     keep_alive()
