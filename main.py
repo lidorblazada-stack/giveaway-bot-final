@@ -1,86 +1,40 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import asyncio
-import random
-import time
-import os
-from flask import Flask
-from threading import Thread
 
-# שרת פנימי כדי ש-Render לא יכבה את הבוט
-app = Flask('')
-@app.route('/')
-def home():
-    return "I'm alive!"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=10000)
-
-def keep_alive():
-    t = Thread(target=run_flask)
-    t.start()
-
+# הגדרת הבוט והרשאות בסיסיות
 intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
+intents.message_content = True  # חייב להיות מופעל גם ב-Discord Developer Portal
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-class GiveawayView(discord.ui.View):
-    def __init__(self, timeout):
-        super().__init__(timeout=timeout)
-        self.participants = []
-
-    @discord.ui.button(label="join!", style=discord.ButtonStyle.danger, emoji="🎉")
-    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user in self.participants:
-            return await interaction.response.send_message("אתה כבר רשום להגרלה!", ephemeral=True)
-        
-        self.participants.append(interaction.user)
-        embed = interaction.message.embeds[0]
-        embed.set_field_at(1, name="👥 Participants:", value=f"**{len(self.participants)}**", inline=True)
-        await interaction.message.edit(embed=embed)
-        await interaction.response.send_message("נרשמת בהצלחה! בהצלחה 🍀", ephemeral=True)
-
-class MyBot(commands.Bot):
-    def __init__(self):
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        await self.tree.sync()
-        print(f"✅ הפקודות סונכרנו!")
-
-bot = MyBot()
-
+# אירוע שקורה כשהבוט נדלק ומסנכרן את הפקודות
 @bot.event
 async def on_ready():
-    print(f'✅ מחובר כ: {bot.user}')
+    print(f'הבוט נדלק בהצלחה בתור: {bot.user.name}')
+    try:
+        # השורה הזו דואגת שהפקודה תופיע בדיסקורד שלך מיד!
+        synced = await bot.tree.sync()
+        print(f"סונכרנו {len(synced)} פקודות סלאש בהצלחה!")
+    except Exception as e:
+        print(f"שגיאה בסנכרון הפקודות: {e}")
 
-@bot.tree.command(name="giveaway", description="התחלת הגרלה עם כפתור")
-async def giveaway(interaction: discord.Interaction, days: int, prize: str):
-    duration_seconds = days * 86400
-    end_time_unix = int(time.time() + duration_seconds)
+# הפקודה שתשגע את המשתמשים חחח
+@bot.tree.command(name="ping-user", description="לתייג חבר שלא עונה כדי להציק לו חחח")
+async def ping_user(interaction: discord.Interaction, target: discord.User, amount: int):
+    # הגבלת כמות ל-10 כדי שדיסקורד לא יחסמו את הבוט על ספאם
+    if amount > 10:
+        amount = 10
+    if amount < 1:
+        amount = 1
+        
+    # הודעה זמנית שרק אתה רואה
+    await interaction.response.send_message(f"מתחיל לתייג את {target.mention} כ-{amount} פעמים... חחח", ephemeral=True)
     
-    embed = discord.Embed(
-        title=f"🎉 {prize} 🎉",
-        description="לחצו על הכפתור למטה כדי להשתתף!",
-        color=discord.Color.from_rgb(255, 215, 0)
-    )
-    embed.add_field(name="🏆 Winners:", value="1", inline=True)
-    embed.add_field(name="👥 Participants:", value="**0**", inline=True)
-    embed.add_field(name="⏳ Ends in:", value=f"<t:{end_time_unix}:R>", inline=False)
-    
-    view = GiveawayView(timeout=duration_seconds)
-    await interaction.response.send_message("ההגרלה פורסמה!", ephemeral=True)
-    message = await interaction.channel.send(embed=embed, view=view)
+    # הלולאה שמציקה בערוץ
+    for i in range(amount):
+        await interaction.channel.send(f"נוווו ענה כברררר {target.mention} !!!")
+        await asyncio.sleep(1) # הפסקה של שנייה בין תיוג לתיוג
 
-    await asyncio.sleep(duration_seconds)
-
-    if not view.participants:
-        await interaction.channel.send(f"ההגרלה על **{prize}** הסתיימה ללא משתתפים.")
-    else:
-        winner = random.choice(view.participants)
-        await interaction.channel.send(f"🎊 מזל טוב {winner.mention}! זכית ב-**{prize}**! 🎊")
-
-keep_alive()
-# כאן הבוט מושך את הטוקן מה-Environment Variables של Render
-bot.run(os.getenv('DISCORD_TOKEN'))
+# שים לב אחי: את הטוקן (Token) של הבוט שלך אתה צריך לשים ב-Render בתוך ה-Environment Variables תחת השם BOT_TOKEN
+import os
+bot.run(os.getenv('BOT_TOKEN'))
